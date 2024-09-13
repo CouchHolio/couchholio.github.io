@@ -4,6 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Pacify Trump Chase</title>
+    
+        <!-- Twitter Card metadata -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@CouchHolio">
+    <meta name="twitter:title" content="Pacify Trump Chase Game">
+    <meta name="twitter:description" content="Can you catch the whining Trump baby with a pacifier? Play now and test your reflexes!">
+    <meta name="twitter:image" content="https://couchholio.github.io/pacify-trump-twitter.png">
+
+    <!-- Open Graph metadata (also used by other platforms like Facebook) -->
+    <meta property="og:title" content="Pacify Trump Chase Game">
+    <meta property="og:description" content="Can you catch the whining Trump baby with a pacifier? Play now and test your reflexes!">
+    <meta property="og:image" content="https://couchholio.github.io/pacify-trump-twitter.png">
+    <meta property="og:url" content="https://couchholio.github.io/">
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
 
@@ -74,7 +88,7 @@
             background-color: #45a049;
         }
 
-        #levelInfo {
+        #levelInfo, #scoreInfo {
             font-size: 1.2em;
             margin-top: 15px;
             font-weight: bold;
@@ -105,7 +119,7 @@
                 padding: 8px 16px;
             }
 
-            #levelInfo {
+            #levelInfo, #scoreInfo {
                 font-size: 1em;
             }
         }
@@ -118,6 +132,7 @@
         <button id="startButton">Start Game</button>
         <button id="nextLevelButton" style="display: none;">Start Next Level</button>
         <div id="levelInfo"></div>
+        <div id="scoreInfo"></div>
     </div>
     <a id="voterLink" href="https://www.usa.gov/confirm-voter-registration" target="_blank">Check Your Voter Registration!</a>
     <a id="voterLink" href="https://x.com/CouchHolio" target="_blank">Follow @CouchHolio on X</a>
@@ -129,6 +144,7 @@
         const startButton = document.getElementById('startButton');
         const nextLevelButton = document.getElementById('nextLevelButton');
         const levelInfo = document.getElementById('levelInfo');
+        const scoreInfo = document.getElementById('scoreInfo');
 
         const talkingAudios = [
             new Audio('talking1.mp3'),
@@ -142,9 +158,11 @@
         let currentTalkingAudio;
 
         let characterImg = new Image();
-        characterImg.src = 'trump.png'; // Replace with your character image path
+        characterImg.src = 'trump.png';
         let pacifierImg = new Image();
-        pacifierImg.src = 'pacifier.png'; // Replace with your pacifier image path
+        pacifierImg.src = 'pacifier.png';
+        let slowDownImg = new Image();
+        slowDownImg.src = 'slow-down.png';
 
         let character = {
             x: 400,
@@ -169,10 +187,13 @@
         let level = 1;
         let baseSpeed = 3;
         let baseCollisionRadius = (character.width + pacifier.width) / 4;
+        let score = 0;
+        let powerUps = [];
+        let particles = [];
 
         function resizeCanvas() {
             const containerWidth = gameContainer.clientWidth;
-            const containerHeight = window.innerHeight * 0.7; // Limit height to 70% of viewport
+            const containerHeight = window.innerHeight * 0.7;
             const aspectRatio = canvas.width / canvas.height;
 
             if (containerWidth / aspectRatio <= containerHeight) {
@@ -229,6 +250,9 @@
                 successAudio.currentTime = 0;
                 successAudio.play();
                 successTimer = 5 * 60;
+                score += 100 * level;
+                updateScoreInfo();
+                particles = createParticles();
             }
         }
 
@@ -239,11 +263,118 @@
             ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
             ctx.font = '24px Poppins';
             ctx.fillText(`You reached Level ${level}`, canvas.width / 2, canvas.height / 2 + 50);
-            ctx.fillText('Tap to restart', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 80);
+            ctx.fillText('Tap to restart', canvas.width / 2, canvas.height / 2 + 120);
         }
 
         function updateLevelInfo() {
             levelInfo.textContent = `Level: ${level}`;
+        }
+
+        function updateScoreInfo() {
+            scoreInfo.textContent = `Score: ${score}`;
+        }
+
+        function drawPowerUps() {
+            powerUps.forEach(powerUp => {
+                if (powerUp.type === 'speed') {
+                    ctx.beginPath();
+                    ctx.arc(powerUp.x, powerUp.y, 15, 0, Math.PI * 2);
+                    ctx.fillStyle = 'blue';
+                    ctx.fill();
+                    ctx.closePath();
+                } else if (powerUp.type === 'slow') {
+                    ctx.drawImage(slowDownImg, powerUp.x - 50, powerUp.y - 20, 100, 41);
+                }
+            });
+        }
+
+        function spawnPowerUp() {
+            if (Math.random() < 0.01 && powerUps.length < 3) {
+                let type = Math.random() < 0.5 ? 'speed' : 'slow';
+                let x, y;
+                if (type === 'slow') {
+                    x = Math.random() * (canvas.width - 100) + 50;
+                    y = Math.random() * (canvas.height - 41) + 20;
+                } else {
+                    x = Math.random() * canvas.width;
+                    y = Math.random() * canvas.height;
+                }
+                powerUps.push({ x, y, type });
+            }
+        }
+
+        function checkPowerUpCollision() {
+            powerUps = powerUps.filter(powerUp => {
+                let collided = false;
+                if (powerUp.type === 'speed') {
+                    const distance = Math.sqrt((powerUp.x - pacifier.x) ** 2 + (powerUp.y - pacifier.y) ** 2);
+                    collided = distance < 30;
+                } else if (powerUp.type === 'slow') {
+                    const pacifierRight = pacifier.x + pacifier.width / 2;
+                    const pacifierLeft = pacifier.x - pacifier.width / 2;
+                    const pacifierBottom = pacifier.y + pacifier.height / 2;
+                    const pacifierTop = pacifier.y - pacifier.height / 2;
+                    
+                    const powerUpRight = powerUp.x + 50;
+                    const powerUpLeft = powerUp.x - 50;
+                    const powerUpBottom = powerUp.y + 20;
+                    const powerUpTop = powerUp.y - 20;
+
+                    collided = !(pacifierLeft > powerUpRight || 
+                                 pacifierRight < powerUpLeft || 
+                                 pacifierTop > powerUpBottom ||
+                                 pacifierBottom < powerUpTop);
+                }
+
+                if (collided) {
+                    if (powerUp.type === 'speed') {
+                        pacifier.width *= 1.5;
+                        pacifier.height *= 1.5;
+                        setTimeout(() => {
+                            pacifier.width /= 1.5;
+                            pacifier.height /= 1.5;
+                        }, 5000);
+                    } else {
+                        character.speed *= 0.5;
+                        setTimeout(() => {
+                            character.speed /= 0.5;
+                        }, 5000);
+                    }
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function createParticles() {
+            let newParticles = [];
+            for (let i = 0; i < 50; i++) {
+                newParticles.push({
+                    x: character.x,
+                    y: character.y,
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 4 - 2,
+                    radius: Math.random() * 3 + 1,
+                    color: `hsl(${Math.random() * 360}, 50%, 50%)`
+                });
+            }
+            return newParticles;
+        }
+
+        function drawParticles() {
+            particles.forEach(particle => {
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                ctx.fillStyle = particle.color;
+                ctx.fill();
+                ctx.closePath();
+
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.radius *= 0.96;
+            });
+            particles = particles.filter(p => p.radius > 0.1);
         }
 
         function gameLoop() {
@@ -253,10 +384,16 @@
                 moveCharacter();
                 drawCharacter();
                 drawPacifier();
+                spawnPowerUp();
+                drawPowerUps();
+                checkPowerUpCollision();
                 checkCollision();
             } else if (gameState === 'success' || gameState === 'levelComplete') {
                 drawCharacter();
                 drawPacifier();
+                if (particles.length > 0) {
+                    drawParticles();
+                }
                 if (gameState === 'success') {
                     successTimer--;
                     if (successTimer <= 0) {
@@ -272,7 +409,7 @@
             requestAnimationFrame(gameLoop);
         }
 
-        function startNextLevel() {
+function startNextLevel() {
             level++;
             character.speed = baseSpeed + (level - 1) * 0.5;
             updateLevelInfo();
@@ -295,11 +432,13 @@
             startButton.style.display = 'none';
             nextLevelButton.style.display = 'none';
             updateLevelInfo();
+            updateScoreInfo();
         }
 
         function restartGame() {
             level = 1;
             character.speed = baseSpeed;
+            score = 0;
             startGame();
         }
 
@@ -339,7 +478,8 @@
 
         Promise.all([
             new Promise(resolve => characterImg.onload = resolve),
-            new Promise(resolve => pacifierImg.onload = resolve)
+            new Promise(resolve => pacifierImg.onload = resolve),
+            new Promise(resolve => slowDownImg.onload = resolve)
         ]).then(() => {
             resizeCanvas();
             drawCharacter();
