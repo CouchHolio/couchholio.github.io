@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pacify Trump Chase</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            color: #333;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #4a4a4a;
+            text-align: center;
+        }
+
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        canvas {
+            border: 2px solid #4a4a4a;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 100%;
+            height: auto;
+        }
+
+        #startButton, #nextLevelButton {
+            font-size: 1.2em;
+            padding: 10px 20px;
+            margin-top: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            touch-action: manipulation;
+        }
+
+        #startButton:hover, #nextLevelButton:hover {
+            background-color: #45a049;
+        }
+
+        #levelInfo {
+            font-size: 1.2em;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #4a4a4a;
+            text-align: center;
+        }
+
+        #voterLink {
+            margin-top: 30px;
+            font-size: 1em;
+            color: #4a4a4a;
+            text-decoration: none;
+            border-bottom: 1px solid #4a4a4a;
+            transition: color 0.3s;
+        }
+
+        #voterLink:hover {
+            color: #45a049;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            #startButton, #nextLevelButton {
+                font-size: 1em;
+                padding: 8px 16px;
+            }
+
+            #levelInfo {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Pacify Trump Chase</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <button id="startButton">Start Game</button>
+        <button id="nextLevelButton" style="display: none;">Start Next Level</button>
+        <div id="levelInfo"></div>
+    </div>
+    <a id="voterLink" href="https://www.usa.gov/confirm-voter-registration" target="_blank">Check Your Voter Registration!</a>
+    <a id="voterLink" href="https://x.com/CouchHolio" target="_blank">Follow @CouchHolio on X</a>
+    <audio id="successAudio" src="success.mp3" loop></audio>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const successAudio = document.getElementById('successAudio');
+        const startButton = document.getElementById('startButton');
+        const nextLevelButton = document.getElementById('nextLevelButton');
+        const levelInfo = document.getElementById('levelInfo');
+
+        const talkingAudios = [
+            new Audio('talking1.mp3'),
+            new Audio('talking2.mp3'),
+            new Audio('talking3.mp3'),
+            new Audio('talking4.mp3'),
+            new Audio('talking5.mp3'),
+            new Audio('talking6.mp3')
+        ];
+
+        let currentTalkingAudio;
+
+        let characterImg = new Image();
+        characterImg.src = 'trump.png'; // Replace with your character image path
+        let pacifierImg = new Image();
+        pacifierImg.src = 'pacifier.png'; // Replace with your pacifier image path
+
+        let character = {
+            x: 400,
+            y: 300,
+            width: 100,
+            height: 100,
+            speed: 3,
+            dx: 1,
+            dy: 1
+        };
+
+        let pacifier = {
+            x: 0,
+            y: 0,
+            width: 50,
+            height: 50
+        };
+
+        let gameState = 'initial';
+        let collisionEnabled = true;
+        let successTimer = 0;
+        let level = 1;
+        let baseSpeed = 3;
+        let baseCollisionRadius = (character.width + pacifier.width) / 4;
+
+        function resizeCanvas() {
+            const containerWidth = gameContainer.clientWidth;
+            const containerHeight = window.innerHeight * 0.7; // Limit height to 70% of viewport
+            const aspectRatio = canvas.width / canvas.height;
+
+            if (containerWidth / aspectRatio <= containerHeight) {
+                canvas.style.width = containerWidth + 'px';
+                canvas.style.height = (containerWidth / aspectRatio) + 'px';
+            } else {
+                canvas.style.height = containerHeight + 'px';
+                canvas.style.width = (containerHeight * aspectRatio) + 'px';
+            }
+        }
+
+        function drawCharacter() {
+            ctx.drawImage(characterImg, character.x - character.width/2, character.y - character.height/2, character.width, character.height);
+        }
+
+        function drawPacifier() {
+            if (gameState === 'success' || gameState === 'levelComplete') {
+                ctx.drawImage(pacifierImg, 
+                    character.x - pacifier.width/2, 
+                    character.y + character.height/4 - pacifier.height/2, 
+                    pacifier.width, pacifier.height);
+            } else {
+                ctx.drawImage(pacifierImg, pacifier.x - pacifier.width/2, pacifier.y - pacifier.height/2, pacifier.width, pacifier.height);
+            }
+        }
+
+        function moveCharacter() {
+            if (gameState !== 'playing') return;
+
+            character.x += character.dx * character.speed;
+            character.y += character.dy * character.speed;
+
+            if (character.x + character.width/2 > canvas.width || character.x - character.width/2 < 0) {
+                character.dx = -character.dx;
+            }
+            if (character.y + character.height/2 > canvas.height || character.y - character.height/2 < 0) {
+                character.dy = -character.dy;
+            }
+        }
+
+        function checkCollision() {
+            if (!collisionEnabled || gameState !== 'playing') return;
+
+            const characterCenterX = character.x;
+            const characterCenterY = character.y + character.height/4;
+            const pacifierCenterX = pacifier.x;
+            const pacifierCenterY = pacifier.y;
+
+            const distance = Math.sqrt((pacifierCenterX - characterCenterX) ** 2 + (pacifierCenterY - characterCenterY) ** 2);
+            const collisionRadius = baseCollisionRadius * (1 - (level - 1) * 0.05);
+            if (distance < collisionRadius) {
+                gameState = 'success';
+                currentTalkingAudio.pause();
+                successAudio.currentTime = 0;
+                successAudio.play();
+                successTimer = 5 * 60;
+            }
+        }
+
+        function drawGameOver() {
+            ctx.font = '48px Poppins';
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over!', canvas.width / 2, canvas.height / 2);
+            ctx.font = '24px Poppins';
+            ctx.fillText(`You reached Level ${level}`, canvas.width / 2, canvas.height / 2 + 50);
+            ctx.fillText('Tap to restart', canvas.width / 2, canvas.height / 2 + 100);
+        }
+
+        function updateLevelInfo() {
+            levelInfo.textContent = `Level: ${level}`;
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'playing') {
+                moveCharacter();
+                drawCharacter();
+                drawPacifier();
+                checkCollision();
+            } else if (gameState === 'success' || gameState === 'levelComplete') {
+                drawCharacter();
+                drawPacifier();
+                if (gameState === 'success') {
+                    successTimer--;
+                    if (successTimer <= 0) {
+                        gameState = 'levelComplete';
+                        successAudio.pause();
+                        nextLevelButton.style.display = 'inline-block';
+                    }
+                }
+            } else if (gameState === 'over') {
+                drawGameOver();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startNextLevel() {
+            level++;
+            character.speed = baseSpeed + (level - 1) * 0.5;
+            updateLevelInfo();
+            startGame();
+        }
+
+        function startGame() {
+            gameState = 'playing';
+            character.x = Math.random() * (canvas.width - character.width) + character.width/2;
+            character.y = Math.random() * (canvas.height - character.height) + character.height/2;
+            pacifier.x = -100;
+            pacifier.y = -100;
+            collisionEnabled = false;
+            setTimeout(() => {
+                collisionEnabled = true;
+            }, 1000);
+            currentTalkingAudio = talkingAudios[Math.floor(Math.random() * talkingAudios.length)];
+            currentTalkingAudio.currentTime = 0;
+            currentTalkingAudio.play();
+            startButton.style.display = 'none';
+            nextLevelButton.style.display = 'none';
+            updateLevelInfo();
+        }
+
+        function restartGame() {
+            level = 1;
+            character.speed = baseSpeed;
+            startGame();
+        }
+
+        function handlePointerMove(e) {
+            if (gameState === 'playing') {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                pacifier.x = (e.clientX - rect.left) * scaleX;
+                pacifier.y = (e.clientY - rect.top) * scaleY;
+            }
+        }
+
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerdown', handlePointerMove);
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'over') {
+                restartGame();
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+        nextLevelButton.addEventListener('click', startNextLevel);
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
+
+        Promise.all([
+            new Promise(resolve => characterImg.onload = resolve),
+            new Promise(resolve => pacifierImg.onload = resolve)
+        ]).then(() => {
+            resizeCanvas();
+            drawCharacter();
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
